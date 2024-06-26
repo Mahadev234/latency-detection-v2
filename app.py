@@ -6,7 +6,7 @@ import websockets
 import subprocess
 import json
 import requests
-from flask import render_template
+from flask import render_template, request
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -23,18 +23,21 @@ IPHUB_API_KEY = os.environ.get(
 IPHUB_URL = "http://v2.api.iphub.info/ip"  # IPHub API URL
 
 
-def get_external_ip():
-    EXTERNAL_IP_MEASUREMENT_URL = os.environ.get(
-        "EXTERNAL_IP_MEASUREMENT_URL", "https://api.ipify.org?format=json"
+def get_ip():
+    data = subprocess.run(
+        [
+            "curl",
+            f"https://ipinfo.io",
+            "-H",
+            f"Authorization: Bearer 5c4e3a98dc5146",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=4,
     )
-    try:
-        response = requests.get(EXTERNAL_IP_MEASUREMENT_URL, timeout=4)
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("ip")
-    except requests.exceptions.RequestException as e:
-        print(f"Error making request to ipify: {e}")
-    return None
+    data = json.loads(data.stdout)
+    print(data["ip"])
+    return data["ip"]
 
 
 async def measure_websocket_rtt(uri, timeout=4):
@@ -62,17 +65,15 @@ def index():
     external_latency = None
     proxy_detected = False
     country = "Unavailable"
-
-    ip_address = (
-        get_external_ip()
-    )  # Replace with the actual IP address you want to check
+    hostName = "Unavailable"
+    ip_address = request.environ.get("HTTP_X_REAL_IP", request.remote_addr)
 
     try:
         start_time = time.perf_counter()
         result = subprocess.run(
             [
                 "curl",
-                f"{IPHUB_URL}/{ip_address}",
+                f"{IPHUB_URL}/{get_ip()}",
                 "-H",
                 f"X-Key: {IPHUB_API_KEY}",
             ],
@@ -87,6 +88,7 @@ def index():
             data = json.loads(result.stdout)
             proxy_detected = data.get("block") == 1
             country = data.get("countryName", "Unavailable")
+            hostName = data.get("hostname", "Unavailable")
             print("data", data)
         else:
             print(f"Curl command failed with return code {result.returncode}")
@@ -115,6 +117,7 @@ def index():
         "Round-Trip Time (ms)": round(rtt, 2) if rtt is not None else "Unavailable",
         "Proxy Detected": "Yes" if proxy_detected else "No",
         "Country": country,
+        "Host Name": hostName,
     }
 
     return render_template("index.html", table_html=table_data)
