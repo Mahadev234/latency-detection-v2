@@ -8,8 +8,7 @@ services:
     environment:
       - EXTERNAL_IP_MEASUREMENT_URL=https://api.ipify.org?format=json
       - IPHUB_API_KEY=MjQ0NTc6emRmVGF5dzltN0pqRFp6a0NqcHF5alVwOFVVMDcxY1U= # Get API key from environment
-    depends_on:  # Optional, but good practice for Nginx
-      - nginx
+
 
   nginx:
     image: nginx:latest
@@ -19,3 +18,5 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - /etc/letsencrypt:/etc/letsencrypt  # For Let's Encrypt certificates (if using)
+    depends_on:
+      - web
