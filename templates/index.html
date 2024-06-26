@@ -46,22 +46,12 @@
             </tr>
         </thead>
         <tbody>
+            {% for key, value in table_html.items() %}
             <tr>
-                <td>Server Latency (ms)</td>
-                <td>{{ table_html["Server Latency (ms)"] }}</td>
+                <td>{{ key }}</td>
+                <td>{{ value }}</td>
             </tr>
-            <tr>
-                <td>External IP Latency (ms)</td>
-                <td>{{ table_html["External IP Latency (ms)"] }}</td>
-            </tr>
-            <tr>
-                <td>Round-Trip Time (ms)</td>
-                <td>{{ table_html["Round-Trip Time (ms)"] }}</td>
-            </tr>
-            <tr>
-                <td>Proxy Detected</td>
-                <td>{{ table_html["Proxy Detected"] }}</td>
-            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </body>

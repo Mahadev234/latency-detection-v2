@@ -3,16 +3,34 @@ import time
 import flask
 import asyncio
 import websockets
+import subprocess
+import json
 import requests
-
 from flask import render_template
+from flask_cors import CORS
 
 app = flask.Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Configuration (Get from environment variables or set defaults)
-EXTERNAL_IP_MEASUREMENT_URL = os.environ.get(
-    "EXTERNAL_IP_MEASUREMENT_URL", "https://api.ipify.org?format=json"
-)  # Replace with your actual URL
+IPHUB_API_KEY = os.environ.get(
+    "IPHUB_API_KEY", "MjQ0NTc6emRmVGF5dzltN0pqRFp6a0NqcHF5alVwOFVVMDcxY1U="
+)  # Replace with your actual API key
+IPHUB_URL = "http://v2.api.iphub.info/ip"  # IPHub API URL
+
+
+def get_external_ip():
+    EXTERNAL_IP_MEASUREMENT_URL = os.environ.get(
+        "EXTERNAL_IP_MEASUREMENT_URL", "https://api.ipify.org?format=json"
+    )
+    try:
+        response = requests.get(EXTERNAL_IP_MEASUREMENT_URL, timeout=4)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("ip")
+    except requests.exceptions.RequestException as e:
+        print(f"Error making request to ipify: {e}")
+    return None
 
 
 async def measure_websocket_rtt(uri, timeout=4):
@@ -35,46 +53,54 @@ async def measure_websocket_rtt(uri, timeout=4):
 
 @app.route("/")
 def index():
-    # Measure latency from external IP using an external service
+    server_start_time = time.perf_counter()
+    # Measure latency and detect proxy status using IPHub
     external_latency = None
+    proxy_detected = False
+    country = "Unavailable"
+
+    ip_address = (
+        get_external_ip()  # Replace with the actual IP address you want to check
+    )
+
     try:
         start_time = time.perf_counter()
-        response = requests.get(
-            EXTERNAL_IP_MEASUREMENT_URL, timeout=4, params={"rand": time.time()}
+        result = subprocess.run(
+            [
+                "curl",
+                f"{IPHUB_URL}/{ip_address}",
+                "-H",
+                f"X-Key: {IPHUB_API_KEY}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=4,
         )
         end_time = time.perf_counter()
-        if response.status_code == 200:
+
+        if result.returncode == 0:
             external_latency = (end_time - start_time) * 1000
+            data = json.loads(result.stdout)
+            proxy_detected = data.get("block") == 1
+            country = data.get("countryName", "Unavailable")
+            print("data", data)
         else:
-            print(f"Received non-200 response: {response.status_code}")
-    except requests.exceptions.RequestException as e:
+            print(f"Curl command failed with return code {result.returncode}")
+            print(result.stderr)
+    except subprocess.TimeoutExpired:
+        print("Curl command timed out")
+    except json.JSONDecodeError:
+        print("Failed to parse JSON response from curl")
+    except Exception as e:
         print(f"Error measuring external latency: {e}")
 
     # Measure RTT using WebSocket to a known server (e.g., echo.websocket.org)
     uri = "wss://echo.websocket.events/"  # Example WebSocket server for testing
     rtt = asyncio.run(measure_websocket_rtt(uri, timeout=4))
 
-    # Proxy detection logic (simplified example - enhance as needed)
-    proxy_detected = flask.request.headers.get("X-Forwarded-For") is not None
-
-    # Render the page and measure server latency
-    start_time = time.perf_counter()
-    rendered_page = render_template(
-        "index.html",
-        table_html={
-            "Server Latency (ms)": "Calculating...",
-            "External IP Latency (ms)": (
-                round(external_latency, 2)
-                if external_latency is not None
-                else "Unavailable"
-            ),
-            "Round-Trip Time (ms)": round(rtt, 2) if rtt is not None else "Unavailable",
-            "Proxy Detected": "Yes" if proxy_detected else "No",
-        },
-    )
-    end_time = time.perf_counter()
-    server_latency = (end_time - start_time) * 1000
-
+    # Measure server latency accurately
+    server_end_time = time.perf_counter()
+    server_latency = (server_end_time - server_start_time) * 1000
     table_data = {
         "Server Latency (ms)": round(server_latency, 2),
         "External IP Latency (ms)": (
@@ -84,6 +110,7 @@ def index():
         ),
         "Round-Trip Time (ms)": round(rtt, 2) if rtt is not None else "Unavailable",
         "Proxy Detected": "Yes" if proxy_detected else "No",
+        "Country": country,
     }
 
     return render_template("index.html", table_html=table_data)
