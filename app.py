@@ -8,9 +8,13 @@ import json
 import requests
 from flask import render_template
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = flask.Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Enable ProxyFix middleware
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 # Configuration (Get from environment variables or set defaults)
 IPHUB_API_KEY = os.environ.get(
@@ -60,8 +64,8 @@ def index():
     country = "Unavailable"
 
     ip_address = (
-        get_external_ip()  # Replace with the actual IP address you want to check
-    )
+        get_external_ip()
+    )  # Replace with the actual IP address you want to check
 
     try:
         start_time = time.perf_counter()
