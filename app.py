@@ -5,7 +5,6 @@ import asyncio
 import websockets
 import subprocess
 import json
-import requests
 from flask import render_template, request
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -21,23 +20,6 @@ IPHUB_API_KEY = os.environ.get(
     "IPHUB_API_KEY", "MjQ0NTc6emRmVGF5dzltN0pqRFp6a0NqcHF5alVwOFVVMDcxY1U="
 )  # Replace with your actual API key
 IPHUB_URL = "http://v2.api.iphub.info/ip"  # IPHub API URL
-
-
-def get_ip():
-    data = subprocess.run(
-        [
-            "curl",
-            f"https://ipinfo.io",
-            "-H",
-            f"Authorization: Bearer 5c4e3a98dc5146",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=4,
-    )
-    data = json.loads(data.stdout)
-    print(data["ip"])
-    return data["ip"]
 
 
 async def measure_websocket_rtt(uri, timeout=4):
@@ -73,7 +55,7 @@ def index():
         result = subprocess.run(
             [
                 "curl",
-                f"{IPHUB_URL}/{get_ip()}",
+                f"{IPHUB_URL}/{ip_address}",
                 "-H",
                 f"X-Key: {IPHUB_API_KEY}",
             ],
